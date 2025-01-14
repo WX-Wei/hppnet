@@ -10,3 +10,6 @@ results*
 test
 web/midi
 web/soundfonts_js
+hppvenv/
+build/
+dist/

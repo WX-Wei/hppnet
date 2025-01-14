@@ -17,13 +17,15 @@ from .lstm import BiLSTM
 
 
 class FreqGroupLSTM(nn.Module):
-    def __init__(self, channel_in, channel_out, lstm_size) -> None:
+    def __init__(self, channel_in, channel_out, lstm_size, concat = False) -> None:
         super().__init__()
-
+        linear_input = lstm_size
+        if concat:
+            linear_input -= 1      
         self.channel_out = channel_out
 
         self.lstm = BiLSTM(channel_in, lstm_size//2)
-        self.linear = nn.Linear(lstm_size, channel_out)
+        self.linear = nn.Linear(linear_input, channel_out)
 
     def forward(self, x):
         # inputs: [b x c_in x T x freq]
@@ -94,14 +96,17 @@ class CNNTrunk(nn.Module):
         c3_out = embedding
         
         self.conv_3 = HarmonicDilatedConv(c_har, c3_out)
-
-        self.block_4 = self.get_conv2d_block(c3_out, c3_out, pool_size=[1, 4], dilation=[1, 48])
-        self.block_5 = self.get_conv2d_block(c3_out, c3_out, dilation=[1, 12])
-        self.block_6 = self.get_conv2d_block(c3_out, c3_out, [5,1])
-        self.block_7 = self.get_conv2d_block(c3_out, c3_out, [5,1])
-        self.block_8 = self.get_conv2d_block(c3_out, c3_out, [5,1])
-        # self.conv_9 = nn.Conv2d(c3_out, 64,1)
-        # self.conv_10 = nn.Conv2d(64, 1, 1)
+        self.block_4 = nn.MaxPool2d([1, 4])
+        self.block_5 = self.get_conv2d_block(c3_out, c3_out, kernel_size=[5, 3], dilation=[1, 12])
+        self.block_6 = self.get_conv2d_block(c3_out, c3_out, kernel_size=[5, 3], dilation=[1, 12])
+        self.block_7 = self.get_conv2d_block(c3_out, c3_out, kernel_size=[5, 3], dilation=[1, 12])
+        self.block_8 = self.get_conv2d_block(c3_out, c3_out, kernel_size=[5, 3], dilation=[1, 12])
+        
+        #self.block_4 = self.get_conv2d_block(c3_out, c3_out, pool_size=[1, 4], dilation=[1, 48])
+        # self.block_5 = self.get_conv2d_block(c3_out, c3_out, dilation=[1, 12])
+        # self.block_6 = self.get_conv2d_block(c3_out, c3_out, [5,1])
+        # self.block_7 = self.get_conv2d_block(c3_out, c3_out, [5,1])
+        # self.block_8 = self.get_conv2d_block(c3_out, c3_out, [5,1])
 
     def forward(self, log_gram_db):
         # inputs: [b x 2 x T x n_freq] , [b x 1 x T x 88]

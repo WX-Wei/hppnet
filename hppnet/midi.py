@@ -83,6 +83,10 @@ def save_midi(path, pitches, intervals, velocities):
         last_tick = current_tick
 
     file.save(path)
+    ##########################
+    saved_file = MidiFile(path)
+    
+    #print(f"Total notes in the saved file: {total_notes}")
 
 
 if __name__ == '__main__':

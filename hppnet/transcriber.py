@@ -51,9 +51,9 @@ class Permute(nn.Module):
         return torch.permute(x, self.dims)
 
 class Head(nn.Module):
-    def __init__(self, model_size) -> None:
+    def __init__(self, model_size, concat) -> None:
         super().__init__()
-        self.head = FreqGroupLSTM(model_size, 1, model_size)
+        self.head = FreqGroupLSTM(model_size, 1, model_size, concat=concat)
     def forward(self, x):
         # input: [B x model_size x T x 88]
         # output: [B x 1 x T x 88]
@@ -70,15 +70,15 @@ class SubNet(nn.Module):
         head_size = model_size
         self.concat = concat
         if(concat):
-            head_size *= 2
+            head_size = head_size + 1
         self.head_names = head_names
         self.heads = nn.ModuleDict()
         for name in head_names:
-            self.heads[name] = Head(head_size)
+            self.heads[name] = Head(head_size, self.concat)
 
         self.time_pooling = time_pooling
        
-    def forward(self, x):
+    def forward(self, x, onset_output=None):
         # input: [B x 2 x T x 352], [B x 1 x T x 88]
         # output:
         #   {"head_1": [B x T x 88], 
@@ -96,7 +96,11 @@ class SubNet(nn.Module):
         output = {}
         for head in self.head_names:
             # => [B x 1 x T x 88]
-            output[head] = self.heads[head](y)
+            if onset_output is not None and self.concat:
+                y_concat = torch.cat([y, onset_output], dim=1)
+            else:
+                y_concat = y
+            output[head] = self.heads[head](y_concat)
             if(self.time_pooling):
                 output[head] = F.interpolate(output[head], size=src_size[-2:], mode='bilinear')
                 # output[head] = F.upsample(output[head], size=src_size[-2:], mode='bilinear')
@@ -120,7 +124,7 @@ class HPPNet(nn.Module):
             self.subnets['onset_subnet'] = self.subnet_onset
             self.subnets['all'].append(self.subnet_onset)
         if 'frame_subnet' in self.config['SUBNETS_TO_TRAIN']:
-            self.subnet_frame = SubNet(model_size, config['frame_subnet_heads'], time_pooling=True)
+            self.subnet_frame = SubNet(model_size, config['frame_subnet_heads'], time_pooling=False, concat=True)
             self.subnets['frame_subnet'] = self.subnet_frame
             self.subnets['all'].append(self.subnet_frame)
             
@@ -177,11 +181,18 @@ class HPPNet(nn.Module):
         # specgram_db = cqt_db
 
         results = {}
+        onset_output = None
+        
         if 'onset_subnet' in self.config['SUBNETS_TO_TRAIN']:
             results_1 = self.subnet_onset(specgram_db)
             results.update(results_1)
+            onset_output = results_1['onset']
+            
+        if onset_output is not None:
+            onset_output = onset_output.detach()
+            
         if 'frame_subnet' in self.config['SUBNETS_TO_TRAIN']:
-            results_2 = self.subnet_frame(specgram_db)
+            results_2 = self.subnet_frame(specgram_db, onset_output=onset_output)
             results.update(results_2)
             
         if self.inference_mode == True:

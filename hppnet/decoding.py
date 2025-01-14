@@ -28,7 +28,7 @@ def get_note_duration(frames):
     return durs.to(torch.int)
 
 
-def extract_notes(onsets, frames, velocity, onset_threshold=0.5, frame_threshold=0.5):
+def extract_notes(onsets, frames, velocity, onset_threshold=0.5, frame_threshold=0.5): #threshold = 0.5
     """
     Finds the note timings based on the onsets and frames information
 
@@ -46,20 +46,29 @@ def extract_notes(onsets, frames, velocity, onset_threshold=0.5, frame_threshold
     intervals: np.ndarray of rows containing (onset_index, offset_index)
     velocities: np.ndarray of velocity values
     """
+    onsets = onsets.squeeze(0)
+    
+    velocity = velocity.squeeze(0)
 
     # only peaks are consider as onsets
     left = onsets[:1, :] >= onsets[1:2, :]
     right = onsets[-1:, :] >= onsets[-2:-1, :]
     mid = (onsets[1:-1] >= onsets[2:]).float() * (onsets[1:-1] >= onsets[:-2]).float()
+    
+    
     onsets = torch.cat([left, mid, right], dim=0).float() * onsets
-
+    
     onsets = (onsets > onset_threshold).cpu().to(torch.uint8)
     frames = (frames > frame_threshold).cpu().to(torch.uint8)
+    
+
     onset_diff = torch.cat([onsets[:1, :], onsets[1:, :] - onsets[:-1, :]], dim=0) == 1
 
-    # => [T x 88]
-    durs = get_note_duration(frames.T).T
+    frames = frames.squeeze(0).T
 
+    # => [T x 88]
+    durs = get_note_duration(frames).T
+    
     pitches = []
     intervals = []
     velocities = []
